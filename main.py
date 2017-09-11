@@ -46,6 +46,8 @@ class Zone:
     goals = attr.ib(default=0)  # int
 
 
+# Connection classes: used to define connections between zones in test
+# definitions, not internally
 @attr.s(frozen=True, slots=True)
 class Bridge:
     connection_type = ConnectionType.bridge
@@ -70,6 +72,7 @@ class Flippy:
     zone2 = attr.ib()
 
 
+# Class for modelling connections between zones, internally
 @attr.s(frozen=True, slots=True)
 class Connection:
     zone = attr.ib()
@@ -83,50 +86,19 @@ class Board:
     connections = attr.ib(convert=frozendict)  # {Zone: Connection}
 
 
-@attr.s(slots=True, frozen=True, init=False)
-class BridgesState:
-    def __init__(self, values=(), reverse=()):
-        frozen_setattr(self, '_values', frozendict(values))
-        frozen_setattr(self, '_reverse', frozendict(reverse))
-
-    _values = attr.ib()  # {Connection: state}
-    _reverse = attr.ib()  # {Connection: Connection}
-
-    def add(self, conn1, conn2, state):
-        values = dict(self._values)
-        reverse = dict(self._reverse)
-
-        values[conn1] = state
-        values[conn2] = state
-        reverse[conn1] = conn2
-        reverse[conn2] = conn1
-        return BridgesState(values=values, reverse=reverse)
-
-    def __getitem__(self, conn):
-        try:
-            return self._values[conn]
-        except KeyError:
-            raise KeyError(conn) from None
-
-    def set(self, conn, state):
-        if conn not in self._reverse:
-            raise KeyError(f"{conn!r} (Hint: use 'add' to add an initial value)")
-        conn2 = self._reverse[conn]
-        return self.add(conn, conn2, state)
-
-
 def get_connections_by_zone(connections):
     connections_by_zone = collections.defaultdict(list)
-    bridges_state = BridgesState()
+    bridges_state = collections.Counter()
 
     for conn in connections:
         conn_12 = Connection(conn.zone2, conn.color, conn.connection_type)
         conn_21 = Connection(conn.zone1, conn.color, conn.connection_type)
         if conn.connection_type == ConnectionType.flippy:
-            bridges_state = bridges_state.add(conn_12, conn_21, conn.zone1)
+            bridges_state[ConnectionType.flippy, conn.zone1, conn.zone2] += 1
+            bridges_state.setdefault((ConnectionType.flippy, conn.zone2, conn.zone1), 0)
         connections_by_zone[conn.zone1].append(conn_12)
         connections_by_zone[conn.zone2].append(conn_21)
-    return connections_by_zone, bridges_state
+    return connections_by_zone, frozendict(bridges_state)
 
 
 @attr.s(frozen=True, slots=True, init=False)
@@ -137,10 +109,10 @@ class State:
             (color, zone, qty)
             for (color, zone), qty in mushroom_counter.items()
         ))
-        frozen_setattr(self, 'bridges', bridges)
+        frozen_setattr(self, 'bridges', frozendict(bridges))
 
     _mushrooms = attr.ib()  # [(Color, Zone, qty)]
-    bridges = attr.ib()  # BridgesState
+    bridges = attr.ib()  # {(ConnectionType, Zone, Zone): int}
 
     @property
     def mushrooms(self):
@@ -173,7 +145,8 @@ class State:
             for zone, shrooms in by_zone.items()
         )
         # TODO: should prob print bridges here but it's pretty verbose
-        return '{}'.format(zones)
+        # return '{} {}'.format(zones, self.bridges)
+        return zones
 
 
 def get_next_states(board, state):
@@ -226,9 +199,15 @@ def get_next_states(board, state):
             elif connection.connection_type == ConnectionType.blocker:
                 connected = not bool(color & connection.color)
             elif connection.connection_type == ConnectionType.flippy:
-                connected = color in PRIMARY_COLORS and bridges[connection] != connection.zone
+                connected = (
+                    color in PRIMARY_COLORS and
+                    bridges[ConnectionType.flippy, zone, connection.zone]
+                )
                 if connected:
-                    bridges = bridges.set(connection, connection.zone)
+                    bridges = dict(bridges)
+                    bridges[ConnectionType.flippy, zone, connection.zone] -= 1
+                    bridges[ConnectionType.flippy, connection.zone, zone] += 1
+                    bridges = frozendict(bridges)
             else:
                 raise NotImplementedError(connection.connection_type)
 
@@ -238,9 +217,6 @@ def get_next_states(board, state):
                 shroom_clone[color, connection.zone] += 1
                 yield State(shroom_clone, bridges)
 
-
-# store all bridges in board
-# store state of bridges w/ reference to bridge in state
 
 def is_victory(board, state):
     goals = collections.Counter({
@@ -261,7 +237,6 @@ def solve(board, start_state):
 
     while queue:
         state = queue.popleft()
-        print(state)
 
         if is_victory(board, state):
             return reconstruct_paths(paths, state)
@@ -323,6 +298,33 @@ def test2():
     state = State(
         mushrooms=[
             (PURPLE, zones[0]),
+        ],
+        bridges=bridges_state,
+    )
+    return solve(board, state)
+
+
+def test_6_1():
+    zones = [
+        Zone(uid='top', goals=1),
+        Zone(uid='right', goals=1),
+        Zone(uid='left'),
+        Zone(uid='bottom', goals=2),
+    ]
+    connections, bridges_state = get_connections_by_zone([
+        Flippy(zones[0], zones[1]),
+        Flippy(zones[2], zones[1]),
+        Bridge(zones[2], zones[3], color=ORANGE),
+    ])
+    board = Board(
+        zones=zones,
+        connections=connections,
+    )
+    state = State(
+        mushrooms=[
+            (ORANGE, zones[0]),
+            (BLUE, zones[2]),
+            (BLUE, zones[2]),
         ],
         bridges=bridges_state,
     )
