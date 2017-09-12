@@ -101,37 +101,18 @@ def get_connections_by_zone(connections):
     return connections_by_zone, frozendict(bridges_state)
 
 
-@attr.s(frozen=True, slots=True, init=False)
+def serialized_counter(mushrooms):
+    return frozendict(+collections.Counter(mushrooms))
+
+
+@attr.s(frozen=True, slots=True)
 class State:
-    def __init__(self, mushrooms, bridges):
-        mushroom_counter = +collections.Counter(mushrooms)
-        frozen_setattr(self, '_mushrooms', frozenset(
-            (color, zone, qty)
-            for (color, zone), qty in mushroom_counter.items()
-        ))
-        frozen_setattr(self, 'bridges', frozendict(bridges))
-
-    _mushrooms = attr.ib()  # [(Color, Zone, qty)]
-    bridges = attr.ib()  # {(ConnectionType, Zone, Zone): int}
-
-    @property
-    def mushrooms(self):
-        return (
-            (color, zone)
-            for color, zone, qty in self._mushrooms
-            for _ in range(qty)
-        )
-
-    @property
-    def grouped_mushrooms(self):
-        return collections.Counter({
-            (color, zone): qty
-            for color, zone, qty in self._mushrooms
-        })
+    mushrooms = attr.ib(convert=serialized_counter)  # {(Color, Zone): int}
+    bridges = attr.ib(convert=frozendict)  # {(ConnectionType, Zone, Zone): int}
 
     def __str__(self):
         by_zone = collections.defaultdict(list)
-        for color, zone, qty in self._mushrooms:
+        for (color, zone), qty in self.mushrooms.items():
             by_zone[zone].append((color, qty))
 
         zones = ', '.join(
@@ -150,7 +131,7 @@ class State:
 
 
 def get_next_states(board, state):
-    shrooms = state.grouped_mushrooms
+    shrooms = state.mushrooms
 
     for color, zone in shrooms:
         # split
@@ -224,7 +205,7 @@ def is_victory(board, state):
         for zone in board.zones
         if zone.goals
     })
-    for (_, zone), qty in state.grouped_mushrooms.items():
+    for (_, zone), qty in state.mushrooms.items():
         goals[zone] -= qty
 
     return not (+goals or -goals)
