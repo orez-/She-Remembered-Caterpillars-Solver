@@ -47,8 +47,7 @@ class Zone:
     buttons = attr.ib(default=0)  # int
 
 
-# Connection classes: used to define connections between zones in test
-# definitions, not internally
+# Connection classes: used to define connections between zones
 @attr.s(frozen=True, slots=True)
 class Bridge:
     connection_type = ConnectionType.bridge
@@ -67,7 +66,6 @@ class Blocker:
 
 @attr.s(frozen=True, slots=True)
 class Flippy:
-    color = "This is a sign that you have modeled this incorrectly"
     connection_type = ConnectionType.flippy
     zone1 = attr.ib()
     zone2 = attr.ib()
@@ -75,7 +73,6 @@ class Flippy:
 
 @attr.s(frozen=True, slots=True)
 class ButtonBridge:
-    color = "Yeah this isn't great I should probably rethink this"
     connection_type = ConnectionType.button
     zone1 = attr.ib()
     zone2 = attr.ib()
@@ -85,8 +82,7 @@ class ButtonBridge:
 @attr.s(frozen=True, slots=True)
 class Connection:
     zone = attr.ib()
-    color = attr.ib()
-    connection_type = attr.ib()
+    connection = attr.ib()
 
 
 @attr.s(slots=True, frozen=True)
@@ -100,8 +96,8 @@ def get_connections_by_zone(connections):
     bridges_state = collections.Counter()
 
     for conn in connections:
-        conn_12 = Connection(conn.zone2, conn.color, conn.connection_type)
-        conn_21 = Connection(conn.zone1, conn.color, conn.connection_type)
+        conn_12 = Connection(conn.zone2, conn)
+        conn_21 = Connection(conn.zone1, conn)
         if conn.connection_type == ConnectionType.flippy:
             bridges_state[ConnectionType.flippy, conn.zone1, conn.zone2] += 1
             bridges_state.setdefault((ConnectionType.flippy, conn.zone2, conn.zone1), 0)
@@ -184,11 +180,12 @@ def get_next_states(board, state):
         for connection in board.connections[zone]:
             connected = False
             bridges = state.bridges
-            if connection.connection_type == ConnectionType.bridge:
-                connected = (color & connection.color) == connection.color
-            elif connection.connection_type == ConnectionType.blocker:
-                connected = not bool(color & connection.color)
-            elif connection.connection_type == ConnectionType.flippy:
+            connection_type = connection.connection.connection_type
+            if connection_type == ConnectionType.bridge:
+                connected = (color & connection.connection.color) == connection.connection.color
+            elif connection_type == ConnectionType.blocker:
+                connected = not bool(color & connection.connection.color)
+            elif connection_type == ConnectionType.flippy:
                 connected = (
                     color in PRIMARY_COLORS and
                     bridges[ConnectionType.flippy, zone, connection.zone]
@@ -198,7 +195,7 @@ def get_next_states(board, state):
                     bridges[ConnectionType.flippy, zone, connection.zone] -= 1
                     bridges[ConnectionType.flippy, connection.zone, zone] += 1
                     bridges = frozendict(bridges)
-            elif connection.connection_type == ConnectionType.button:
+            elif connection_type == ConnectionType.button:
                 buttons = collections.Counter({
                     zone_: zone_.buttons
                     for zone_ in board.zones
@@ -210,7 +207,7 @@ def get_next_states(board, state):
                     buttons[zone_] -= qty
                 connected = not +buttons
             else:
-                raise NotImplementedError(connection.connection_type)
+                raise NotImplementedError(connection_type)
 
             if connected:
                 shroom_clone = collections.Counter(shrooms)
