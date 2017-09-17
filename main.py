@@ -14,6 +14,8 @@ ORANGE = RED | YELLOW
 GREEN = BLUE | YELLOW
 PURPLE = RED | BLUE
 
+BLACK = RED | YELLOW | BLUE
+
 PRIMARY_COLORS = {RED, YELLOW, BLUE}
 SECONDARY_COLORS = {ORANGE, GREEN, PURPLE}
 
@@ -34,6 +36,7 @@ terminal_colors = {
     GREEN: 2,
     BLUE: 4,
     PURPLE: 5,
+    BLACK: 8,
 }
 clear = '\x1b[0m'
 af = '\x1b[38;5;{}m{}\x1b[0m'.format
@@ -194,7 +197,7 @@ def get_next_states(board, state):
                 connected = not bool(color & direction.connection.color)
             elif connection_type == ConnectionType.flippy:
                 connected = (
-                    color in PRIMARY_COLORS and
+                    color not in SECONDARY_COLORS and
                     bridges[ConnectionType.flippy, zone, direction.to_zone]
                 )
                 if connected:
@@ -427,6 +430,77 @@ def test_7_2():
             (RED, zones[0]),
             (PURPLE, zones[3]),
             (YELLOW, zones[5]),
+        ],
+        bridges=bridges_state,
+    )
+    return solve(board, state)
+
+
+def test_7_4():
+    zones = [
+        Zone(uid='top', colorizers=[BLUE, RED]),
+        Zone(uid='right'),
+        Zone(uid='middle', colorizers=[YELLOW]),
+        Zone(uid='left', buttons=1, goals=1),
+        Zone(uid='bottom right'),
+        Zone(uid='bottom', goals=2),
+    ]
+    connections, bridges_state = get_connections_by_zone([
+        ButtonBridge(zones[0], zones[1]),
+        Blocker(zones[0], zones[1], color=ORANGE),
+        Blocker(zones[0], zones[2], color=ORANGE),
+        Bridge(zones[1], zones[2], color=BLUE),
+        Flippy(zones[1], zones[4]),
+        Bridge(zones[2], zones[3], color=RED),
+        Bridge(zones[4], zones[5], color=ORANGE),
+    ])
+    board = Board(
+        zones=zones,
+        connections=connections,
+    )
+    state = State(
+        mushrooms=[
+            (PURPLE, zones[1]),
+            (RED, zones[4]),
+        ],
+        bridges=bridges_state,
+    )
+    return solve(board, state)
+
+
+def test_8_1():
+    zones = [
+        Zone(uid='top', colorizers=[BLUE, YELLOW], buttons=1),
+        Zone(uid='top left', buttons=1),
+        Zone(uid='left'),
+        Zone(uid='bottom left'),
+        Zone(uid='right', colorizers=[RED]),
+        Zone(uid='goal', goals=3),
+        Zone(uid='bottom', goals=1),
+        Zone(uid='middle'),
+        Zone(uid='red', colorizers=[RED]),
+    ]
+    connections, bridges_state = get_connections_by_zone([
+        Bridge(zones[0], zones[1], color=ORANGE),
+        Bridge(zones[1], zones[2], color=BLUE),
+        ButtonBridge(zones[2], zones[7]),
+        Flippy(zones[2], zones[3]),
+        Blocker(zones[3], zones[6], color=YELLOW),
+        Bridge(zones[6], zones[8], color=PURPLE),
+        Flippy(zones[8], zones[7]),
+        Blocker(zones[0], zones[7], color=YELLOW),
+        Bridge(zones[0], zones[4], color=RED),
+        Blocker(zones[4], zones[5], color=BLACK),
+    ])
+    board = Board(
+        zones=zones,
+        connections=connections,
+    )
+    state = State(
+        mushrooms=[
+            (BLACK, zones[0]),
+            (PURPLE, zones[7]),
+            (YELLOW, zones[3]),
         ],
         bridges=bridges_state,
     )
