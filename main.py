@@ -78,17 +78,17 @@ class ButtonBridge:
     zone2 = attr.ib()
 
 
-# Class for modelling connections between zones, internally
+# Class for modelling connections out of a zone
 @attr.s(frozen=True, slots=True)
-class Connection:
-    zone = attr.ib()
+class DirectedConnection:
+    to_zone = attr.ib()
     connection = attr.ib()
 
 
 @attr.s(slots=True, frozen=True)
 class Board:
     zones = attr.ib()  # [Zone]
-    connections = attr.ib(convert=frozendict)  # {Zone: Connection}
+    connections = attr.ib(convert=frozendict)  # {Zone: DirectedConnection}
 
 
 def get_connections_by_zone(connections):
@@ -96,8 +96,8 @@ def get_connections_by_zone(connections):
     bridges_state = collections.Counter()
 
     for conn in connections:
-        conn_12 = Connection(conn.zone2, conn)
-        conn_21 = Connection(conn.zone1, conn)
+        conn_12 = DirectedConnection(conn.zone2, conn)
+        conn_21 = DirectedConnection(conn.zone1, conn)
         if conn.connection_type == ConnectionType.flippy:
             bridges_state[ConnectionType.flippy, conn.zone1, conn.zone2] += 1
             bridges_state.setdefault((ConnectionType.flippy, conn.zone2, conn.zone1), 0)
@@ -177,23 +177,23 @@ def get_next_states(board, state):
             yield State(shroom_clone, state.bridges)
 
         # move
-        for connection in board.connections[zone]:
+        for direction in board.connections[zone]:
             connected = False
             bridges = state.bridges
-            connection_type = connection.connection.connection_type
+            connection_type = direction.connection.connection_type
             if connection_type == ConnectionType.bridge:
-                connected = (color & connection.connection.color) == connection.connection.color
+                connected = (color & direction.connection.color) == direction.connection.color
             elif connection_type == ConnectionType.blocker:
-                connected = not bool(color & connection.connection.color)
+                connected = not bool(color & direction.connection.color)
             elif connection_type == ConnectionType.flippy:
                 connected = (
                     color in PRIMARY_COLORS and
-                    bridges[ConnectionType.flippy, zone, connection.zone]
+                    bridges[ConnectionType.flippy, zone, direction.to_zone]
                 )
                 if connected:
                     bridges = dict(bridges)
-                    bridges[ConnectionType.flippy, zone, connection.zone] -= 1
-                    bridges[ConnectionType.flippy, connection.zone, zone] += 1
+                    bridges[ConnectionType.flippy, zone, direction.to_zone] -= 1
+                    bridges[ConnectionType.flippy, direction.to_zone, zone] += 1
                     bridges = frozendict(bridges)
             elif connection_type == ConnectionType.button:
                 buttons = collections.Counter({
@@ -212,7 +212,7 @@ def get_next_states(board, state):
             if connected:
                 shroom_clone = collections.Counter(shrooms)
                 shroom_clone[color, zone] -= 1
-                shroom_clone[color, connection.zone] += 1
+                shroom_clone[color, direction.to_zone] += 1
                 yield State(shroom_clone, bridges)
 
 
