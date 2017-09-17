@@ -39,12 +39,18 @@ clear = '\x1b[0m'
 af = '\x1b[38;5;{}m{}\x1b[0m'.format
 
 
+def convert_buttons(buttons):
+    if isinstance(buttons, int):
+        return (buttons,)
+    return buttons
+
+
 @attr.s(frozen=True, slots=True)
 class Zone:
     uid = attr.ib()
     colorizers = attr.ib(default=[], convert=frozenset)  # [Color]
     goals = attr.ib(default=0)  # int
-    buttons = attr.ib(default=0)  # int
+    buttons = attr.ib(default=None, convert=convert_buttons)  # (int, ...)
 
 
 # Connection classes: used to define connections between zones
@@ -76,6 +82,7 @@ class ButtonBridge:
     connection_type = ConnectionType.button
     zone1 = attr.ib()
     zone2 = attr.ib()
+    button_set = attr.ib(default=0)
 
 
 # Class for modelling connections out of a zone
@@ -196,10 +203,11 @@ def get_next_states(board, state):
                     bridges[ConnectionType.flippy, direction.to_zone, zone] += 1
                     bridges = frozendict(bridges)
             elif connection_type == ConnectionType.button:
+                index = direction.connection.button_set
                 buttons = collections.Counter({
-                    zone_: zone_.buttons
+                    zone_: zone_.buttons[index]
                     for zone_ in board.zones
-                    if zone_.buttons
+                    if zone_.buttons and zone_.buttons[index]
                 })
                 for (color_, zone_), qty in shrooms.items():
                     if (color_, zone_) == (color, zone):  # can't hold button for yourself
@@ -393,8 +401,40 @@ def test_6_7():
     return solve(board, state)
 
 
+def test_7_2():
+    zones = [
+        Zone(uid='top left', goals=1, buttons=(1, 0)),
+        Zone(uid='top', buttons=(0, 1)),
+        Zone(uid='top right', goals=1),
+        Zone(uid='bottom left', buttons=(1, 0)),
+        Zone(uid='bottom'),
+        Zone(uid='bottom right', goals=2, buttons=(1, 0)),
+    ]
+    connections, bridges_state = get_connections_by_zone([
+        Bridge(zones[0], zones[1], color=BLUE),
+        Blocker(zones[1], zones[2], color=YELLOW),
+        Bridge(zones[0], zones[3], color=PURPLE),
+        Blocker(zones[3], zones[4], color=RED),
+        ButtonBridge(zones[1], zones[4], button_set=1),
+        ButtonBridge(zones[4], zones[5], button_set=0),
+    ])
+    board = Board(
+        zones=zones,
+        connections=connections,
+    )
+    state = State(
+        mushrooms=[
+            (RED, zones[0]),
+            (PURPLE, zones[3]),
+            (YELLOW, zones[5]),
+        ],
+        bridges=bridges_state,
+    )
+    return solve(board, state)
+
+
 if __name__ == '__main__':
-    paths = test_6_7()
+    paths = test_7_2()
     if paths:
         print()
         print("SOLUTION")
