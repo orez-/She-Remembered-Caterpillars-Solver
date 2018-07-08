@@ -51,9 +51,9 @@ def convert_buttons(buttons):
 @attr.s(frozen=True, slots=True)
 class Zone:
     uid = attr.ib()
-    colorizers = attr.ib(default=[], convert=frozenset)  # [Color]
+    colorizers = attr.ib(default=[], converter=frozenset)  # [Color]
     goals = attr.ib(default=0)  # int
-    buttons = attr.ib(default=None, convert=convert_buttons)  # (int, ...)
+    buttons = attr.ib(default=None, converter=convert_buttons)  # (int, ...)
 
 
 # Connection classes: used to define connections between zones
@@ -98,7 +98,7 @@ class DirectedConnection:
 @attr.s(slots=True, frozen=True)
 class Board:
     zones = attr.ib()  # [Zone]
-    connections = attr.ib(convert=frozendict)  # {Zone: DirectedConnection}
+    connections = attr.ib(converter=frozendict)  # {Zone: DirectedConnection}
 
 
 def get_connections_by_zone(connections):
@@ -122,8 +122,8 @@ def serialized_counter(mushrooms):
 
 @attr.s(frozen=True, slots=True)
 class State:
-    mushrooms = attr.ib(convert=serialized_counter)  # {(Color, Zone): int}
-    bridges = attr.ib(convert=frozendict)  # {(ConnectionType, Zone, Zone): int}
+    mushrooms = attr.ib(converter=serialized_counter)  # {(Color, Zone): int}
+    bridges = attr.ib(converter=frozendict)  # {(ConnectionType, Zone, Zone): int}
 
     def __str__(self):
         by_zone = collections.defaultdict(list)
